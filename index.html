@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MERCHANDISER LOG</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#0b1020" />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* Neon / glass background */
+    .neon-bg {
+      background:
+        radial-gradient(900px 500px at 18% 8%, rgba(99,102,241,.38), transparent 60%),
+        radial-gradient(700px 500px at 82% 16%, rgba(236,72,153,.22), transparent 55%),
+        radial-gradient(650px 650px at 65% 78%, rgba(34,197,94,.16), transparent 60%),
+        radial-gradient(900px 600px at 10% 92%, rgba(59,130,246,.16), transparent 60%),
+        linear-gradient(180deg, #070a14 0%, #0a0f21 40%, #070a14 100%);
+    }
+    .glass {
+      background: rgba(17, 24, 39, 0.55);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(148,163,184,.16);
+      box-shadow: 0 18px 60px rgba(0,0,0,.45);
+    }
+    .glass-soft {
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148,163,184,.12);
+      box-shadow: 0 14px 40px rgba(0,0,0,.35);
+    }
+    .glow-line {
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(99,102,241,.0), rgba(99,102,241,.9), rgba(236,72,153,.9), rgba(34,197,94,.0));
+      filter: drop-shadow(0 0 14px rgba(236,72,153,.35));
+    }
+
+    /* LEDs */
+    .dot{ width:10px; height:10px; border-radius:999px; background:#94a3b8; }
+    .dot.ok{ background:#22c55e; box-shadow: 0 0 14px rgba(34,197,94,.40); }
+    .dot.warn{ background:#f59e0b; box-shadow: 0 0 14px rgba(245,158,11,.35); }
+    .dot.bad{ background:#ef4444; box-shadow: 0 0 14px rgba(239,68,68,.30); }
+
+    /* Pulsing glow for active neon buttons */
+    @keyframes pulseGlow {
+      0%   { box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 10px var(--glow), 0 0 22px rgba(0,0,0,0); border-color: rgba(255,255,255,.12); }
+      50%  { box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 18px var(--glow), 0 0 36px var(--glow2); border-color: rgba(255,255,255,.24); }
+      100% { box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 10px var(--glow), 0 0 22px rgba(0,0,0,0); border-color: rgba(255,255,255,.12); }
+    }
+    .pulse-active{
+      animation: pulseGlow 1.6s ease-in-out infinite;
+    }
+
+    /* overlay stacking */
+    #drawerBack { z-index: 8000; }
+    #formBack { z-index: 9000; }
+    #modalBack { z-index: 10000; }
+    #loginBack { z-index: 11000; }
+  </style>
+</head>
+
+<body class="min-h-screen neon-bg text-slate-100">
+  <div class="mx-auto w-full max-w-[480px] px-4 py-6">
+    <!-- HEADER CARD -->
+    <div class="glass rounded-[28px] overflow-hidden">
+      <div class="glow-line"></div>
+
+      <div class="p-5">
+        <div class="flex items-start justify-between gap-3">
+          <!-- Left: avatar -->
+          <div class="flex flex-col items-center gap-2">
+            <div class="h-14 w-14 rounded-2xl glass-soft flex items-center justify-center border border-slate-400/15">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" class="opacity-90">
+                <path d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M20 22a8 8 0 1 0-16 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div id="userEmailTop" class="text-[10px] font-extrabold tracking-widest text-slate-300/90 max-w-[110px] truncate text-center">
+  nepřihlášen
+</div>
+          </div>
+
+          <!-- Center title -->
+          <div class="flex-1 text-center pt-1">
+            <div class="text-xl font-black tracking-wide">Docházka 2.0</div>
+            <div class="mt-1 text-sm text-slate-300">
+              <span id="nowText" class="font-semibold">--</span>
+            </div>
+          </div>
+
+          <!-- Right hamburger -->
+          <button id="btnHamb"
+            class="h-12 w-12 rounded-2xl glass-soft flex items-center justify-center border border-slate-400/15 hover:border-slate-200/20 transition active:scale-[.99]"
+            title="Menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" class="opacity-90">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Status LED row -->
+        <div class="mt-4 grid grid-cols-3 gap-3">
+          <div class="glass-soft rounded-2xl px-3 py-2 flex items-center justify-center gap-2 border border-slate-400/10">
+            <span id="gpsDot" class="h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_14px_rgba(245,158,11,.35)]"></span>
+            <span class="text-[11px] font-extrabold tracking-widest text-slate-200">GPS</span>
+          </div>
+          <div class="glass-soft rounded-2xl px-3 py-2 flex items-center justify-center gap-2 border border-slate-400/10">
+            <span id="onlineDot" class="h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_14px_rgba(245,158,11,.35)]"></span>
+            <span class="text-[11px] font-extrabold tracking-widest text-slate-200">ONLINE</span>
+          </div>
+          <div class="glass-soft rounded-2xl px-3 py-2 flex items-center justify-center gap-2 border border-slate-400/10">
+            <span class="dot" id="syncDot"></span>
+            <span class="text-[11px] font-extrabold tracking-widest text-slate-200">AUTH</span>
+          </div>
+        </div>
+
+        <!-- Mode pill -->
+        <div class="mt-4 flex justify-center">
+          <div id="modePill"
+            class="px-5 py-2 rounded-full glass-soft border border-rose-400/20 text-rose-200 text-[11px] font-extrabold tracking-widest uppercase shadow-[0_0_24px_rgba(244,63,94,.14)]">
+            MIMO PRACOVNÍ DOBU
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CARD -->
+    <div class="mt-5 glass rounded-[28px] p-5">
+      <!-- Work shift -->
+      <div class="text-[11px] font-extrabold tracking-widest text-slate-400 uppercase mb-3">PRACOVNÍ SMĚNA</div>
+      <div class="grid grid-cols-2 gap-4">
+        <button id="btnShiftStart"
+  class="rounded-2xl py-5 text-emerald-200 font-black tracking-widest
+         bg-emerald-500/18 border border-emerald-300/20
+         active:scale-[.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
+  style="--glow: rgba(34,197,94,.60); --glow2: rgba(34,197,94,.22);">
+  PŘÍCHOD
+</button>
+        <button id="btnShiftEnd"
+  class="rounded-2xl py-5 text-rose-200 font-black tracking-widest
+         bg-transparent border border-rose-300/25
+         active:scale-[.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
+  style="--glow: rgba(244,63,94,.55); --glow2: rgba(244,63,94,.20);">
+  ODCHOD
+</button>
+      </div>
+
+      <div class="my-5 h-px bg-slate-200/10"></div>
+
+      <!-- NEW: Day/Work type buttons -->
+      <div class="text-[11px] font-extrabold tracking-widest text-slate-400 uppercase mb-3">TYP AKTIVITY</div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Home Office -->
+        <button id="btnHomeOffice"
+          class="rounded-2xl py-5 text-amber-200 font-black tracking-widest bg-amber-400/15 border border-amber-200/20 active:scale-[.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
+          style="--glow: rgba(245,158,11,.55); --glow2: rgba(245,158,11,.20);">
+          HOME<br><span class="text-[10px] opacity-80">OFFICE</span>
+        </button>
+
+        <!-- Vacation -->
+        <button id="btnVacationMain"
+          class="rounded-2xl py-5 text-sky-200 font-black tracking-widest bg-sky-500/15 border border-sky-300/20 active:scale-[.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
+          style="--glow: rgba(56,189,248,.55); --glow2: rgba(56,189,248,.20);">
+          DOVOLENÁ<br>
+        </button>
+
+        <!-- Sick -->
+        <button id="btnSickMain"
+  class="rounded-2xl py-5 text-violet-100 font-black tracking-widest
+         bg-violet-500/25 border border-violet-300/25
+         active:scale-[.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
+  style="--glow: rgba(167,139,250,.65); --glow2: rgba(167,139,250,.25);">
+  NEMOC
+</button>
+
+        <!-- Training -->
+        <button id="btnTrainingMain"
+  class="rounded-2xl py-5 text-pink-100 font-black tracking-widest
+         bg-pink-500/25 border border-pink-300/25
+         active:scale-[.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
+  style="--glow: rgba(236,72,153,.65); --glow2: rgba(236,72,153,.25);">
+  ŠKOLENÍ
+</button>
+      </div>
+
+      <!-- Status (neon/glass) -->
+      <div class="mt-4 glass-soft rounded-2xl px-4 py-4 border border-slate-400/10">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-2xl glass-soft border border-slate-200/10 flex items-center justify-center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="opacity-90">
+                <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">STATUS</div>
+              <div class="text-sm font-black tracking-wide text-slate-100" id="statusText">Stav: připraveno.</div>
+            </div>
+          </div>
+
+          <div class="glass-soft rounded-full px-3 py-2 border border-slate-200/10 flex items-center gap-2">
+            <span class="text-[11px] font-extrabold tracking-widest text-slate-200" id="syncText">offline</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity collapsible -->
+      <div class="mt-6 text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">DNEŠNÍ AKTIVITA</div>
+      <div class="mt-3 glass-soft rounded-2xl border border-slate-400/10 overflow-hidden">
+        <button id="activityToggle" class="w-full px-4 py-4 flex items-center justify-between gap-3 active:scale-[.99] transition">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-2xl glass-soft border border-slate-200/10 flex items-center justify-center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="opacity-90">
+                <path d="M8 6h13M8 12h13M8 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M3.5 6h.5M3.5 12h.5M3.5 18h.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="text-left">
+              <div class="text-sm font-black tracking-wide text-slate-100">
+                Aktivity: <span id="activityCount">0</span>
+              </div>
+              <div class="text-[11px] text-slate-400" id="activityHint">Klikni pro rozbalení detailu</div>
+            </div>
+          </div>
+          <svg id="activityArrow" width="20" height="20" viewBox="0 0 24 24" fill="none" class="opacity-90 transition-transform">
+            <path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <div id="activityList" class="px-4 pb-4 hidden"></div>
+      </div>
+
+      <div class="mt-4 text-[11px] text-slate-500">
+        • Data se synchronizují s cloudem automaticky. Když není signál, ukládá se do fronty a odešle se později.
+      </div>
+    </div>
+
+    <div class="mt-5 text-center text-[10px] text-slate-600 tracking-widest opacity-70">
+      MERCHANDISER LOG • NEON/GLASS UI
+    </div>
+  </div>
+
+  <!-- Confirm modal -->
+  <div id="modalBack" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-5" aria-hidden="true">
+    <div class="glass rounded-3xl w-full max-w-[430px] overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200/10 font-black tracking-wide">Potvrzení</div>
+      <div class="px-5 py-5">
+        <p id="modalMsg" class="text-slate-200 font-semibold whitespace-pre-wrap">--</p>
+      </div>
+      <div class="px-5 py-4 border-t border-slate-200/10 flex gap-3">
+        <button id="modalYes" class="flex-1 rounded-2xl py-3 font-black tracking-widest bg-emerald-500/20 border border-emerald-300/20 active:scale-[.99] transition"
+          style="--glow: rgba(34,197,94,.45); --glow2: rgba(34,197,94,.20);">
+          ANO
+        </button>
+        <button id="modalNo" class="flex-1 rounded-2xl py-3 font-black tracking-widest bg-rose-500/18 border border-rose-300/20 active:scale-[.99] transition"
+          style="--glow: rgba(244,63,94,.40); --glow2: rgba(244,63,94,.18);">
+          NE
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drawer -->
+  <div id="drawerBack" class="fixed inset-0 bg-black/45 hidden" aria-hidden="true">
+    <div class="absolute right-0 top-0 h-full w-[92vw] max-w-[380px] glass border-l border-slate-200/10">
+      <div class="px-5 py-4 border-b border-slate-200/10 flex items-center justify-between">
+        <div class="font-black tracking-wide" id="drawerTitle">MENU</div>
+        <button id="drawerClose" class="h-10 w-10 rounded-2xl glass-soft border border-slate-200/10 flex items-center justify-center active:scale-[.99] transition">
+          ✕
+        </button>
+      </div>
+
+      <div class="p-5 space-y-3 overflow-auto h-[calc(100%-72px)]">
+        <!-- Export moved here -->
+        <div class="text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">Export</div>
+
+        <div class="glass-soft rounded-2xl border border-slate-200/10 p-4">
+          <div class="text-[11px] text-slate-400 font-extrabold tracking-widest uppercase">Období</div>
+          <input id="monthPick" type="month"
+            class="mt-2 w-full rounded-2xl px-3 py-4 bg-slate-950/35 border border-slate-400/15 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-300/25" />
+          <button id="btnExport"
+            class="mt-3 w-full rounded-2xl py-4 font-black tracking-widest bg-slate-950/40 border border-slate-400/15 hover:border-slate-200/20 active:scale-[.99] transition">
+            ⬇ Export CSV
+          </button>
+        </div>
+
+        <div class="mt-4 text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">Účet</div>
+        <button id="btnAccount" class="w-full glass-soft rounded-2xl px-4 py-4 border border-slate-200/10 flex items-center justify-between active:scale-[.99] transition">
+          <span class="font-bold" id="accountLabel">Nepřihlášen</span>
+          <span class="text-[11px] font-extrabold tracking-widest px-3 py-1 rounded-full bg-slate-950/35 border border-slate-200/10" id="accountChip">login</span>
+        </button>
+
+        <div class="mt-4 text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">Servis</div>
+        <button id="btnSyncNow" class="w-full glass-soft rounded-2xl px-4 py-4 border border-slate-200/10 flex items-center justify-between active:scale-[.99] transition">
+          <span class="font-bold">Odeslat čekající záznamy</span>
+          <span class="text-[11px] font-extrabold tracking-widest px-3 py-1 rounded-full bg-slate-950/35 border border-slate-200/10">sync</span>
+        </button>
+
+        <button id="btnClearToday" class="w-full glass-soft rounded-2xl px-4 py-4 border border-slate-200/10 flex items-center justify-between active:scale-[.99] transition">
+          <span class="font-bold">Vymazat dnešní lokální cache</span>
+          <span class="text-[11px] font-extrabold tracking-widest px-3 py-1 rounded-full bg-rose-500/15 border border-rose-300/15 text-rose-200">lokál</span>
+        </button>
+
+        <button id="btnClearAllLocal" class="w-full glass-soft rounded-2xl px-4 py-4 border border-slate-200/10 flex items-center justify-between active:scale-[.99] transition">
+          <span class="font-bold">Vymazat veškerá lokální data</span>
+          <span class="text-[11px] font-extrabold tracking-widest px-3 py-1 rounded-full bg-rose-500/15 border border-rose-300/15 text-rose-200">lokál</span>
+        </button>
+
+        <div class="text-[11px] text-slate-500">
+          Tip: po update PWA někdy pomůže smazat data webu (Chrome → 🔒 → Úložiště → Vymazat data).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form modal -->
+  <div id="formBack" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-5" aria-hidden="true">
+    <div class="glass rounded-3xl w-full max-w-[430px] overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200/10 font-black tracking-wide" id="formTitle">Formulář</div>
+      <div class="px-5 py-5" id="formBody"></div>
+      <div class="px-5 py-4 border-t border-slate-200/10 flex gap-3" id="formActions"></div>
+    </div>
+  </div>
+
+  <!-- Login overlay -->
+  <div id="loginBack" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-5" aria-hidden="true">
+    <div class="glass rounded-3xl w-full max-w-[430px] overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200/10 font-black tracking-wide">Přihlášení</div>
+      <div class="px-5 py-5">
+        <div class="text-[12px] text-slate-400 mb-4">Přihlášení je potřeba, aby se docházka ukládala online.</div>
+
+        <label class="block text-[11px] font-extrabold tracking-widest text-slate-400 uppercase mb-2">Email</label>
+        <input id="loginEmail" type="email"
+          class="w-full rounded-2xl px-4 py-4 bg-slate-950/35 border border-slate-400/15 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-300/25"
+          placeholder="name@company.cz" />
+
+        <div class="h-4"></div>
+
+        <label class="block text-[11px] font-extrabold tracking-widest text-slate-400 uppercase mb-2">Heslo</label>
+        <input id="loginPass" type="password"
+          class="w-full rounded-2xl px-4 py-4 bg-slate-950/35 border border-slate-400/15 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-300/25"
+          placeholder="••••••••" />
+
+        <div id="loginMsg" class="mt-3 text-[12px] text-rose-300 hidden"></div>
+      </div>
+
+      <div class="px-5 py-4 border-t border-slate-200/10 flex gap-3">
+        <button id="btnLogin" class="flex-1 rounded-2xl py-3 font-black tracking-widest bg-emerald-500/20 border border-emerald-300/20 active:scale-[.99] transition"
+          style="--glow: rgba(34,197,94,.45); --glow2: rgba(34,197,94,.20);">
+          Přihlásit
+        </button>
+        <button id="btnResetPass" class="flex-1 rounded-2xl py-3 font-black tracking-widest bg-slate-950/35 border border-slate-200/10 active:scale-[.99] transition">
+          Reset hesla
+        </button>
+        <button id="btnLoginLater" class="flex-1 rounded-2xl py-3 font-black tracking-widest bg-slate-950/35 border border-slate-200/10 active:scale-[.99] transition">
+          Později
+        </button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  /******************************************************************
+   * 0) SUPABASE KONFIGURACE
+   ******************************************************************/
+  const SUPABASE_URL = "https://rzjgpjhtqzoafzndeqox.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6amdwamh0cXpvYWZ6bmRlcW94Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NjI1NTUsImV4cCI6MjA4NzUzODU1NX0.Awfj2HOpap8e2wRUtDUZZYh2AKeGoQPkMVwTbZ1qvkA";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  /******************************************************************
+   * 1) DOM
+   ******************************************************************/
+  const elNow = document.getElementById("nowText");
+  const elPill = document.getElementById("modePill");
+  const elUserEmailTop = document.getElementById("userEmailTop");
+
+  const elStatusText = document.getElementById("statusText");
+  const elSyncDot = document.getElementById("syncDot");
+  const elSyncText = document.getElementById("syncText");
+
+  const elGpsDot = document.getElementById("gpsDot");
+  const elOnlineDot = document.getElementById("onlineDot");
+
+  const btnShiftStart = document.getElementById("btnShiftStart");
+  const btnShiftEnd = document.getElementById("btnShiftEnd");
+
+  const btnHomeOffice = document.getElementById("btnHomeOffice");
+  const btnVacationMain = document.getElementById("btnVacationMain");
+  const btnSickMain = document.getElementById("btnSickMain");
+  const btnTrainingMain = document.getElementById("btnTrainingMain");
+
+  // export moved to drawer
+  const btnExport = document.getElementById("btnExport");
+  const monthPick = document.getElementById("monthPick");
+
+  // confirm modal
+  const modalBack = document.getElementById("modalBack");
+  const modalMsg = document.getElementById("modalMsg");
+  const modalYes = document.getElementById("modalYes");
+  const modalNo = document.getElementById("modalNo");
+
+  // drawer
+  const btnHamb = document.getElementById("btnHamb");
+  const drawerBack = document.getElementById("drawerBack");
+  const drawerClose = document.getElementById("drawerClose");
+  const btnAccount = document.getElementById("btnAccount");
+  const accountLabel = document.getElementById("accountLabel");
+  const accountChip = document.getElementById("accountChip");
+  const btnSyncNow = document.getElementById("btnSyncNow");
+  const btnClearToday = document.getElementById("btnClearToday");
+  const btnClearAllLocal = document.getElementById("btnClearAllLocal");
+
+  // form modal
+  const formBack = document.getElementById("formBack");
+  const formTitle = document.getElementById("formTitle");
+  const formBody = document.getElementById("formBody");
+  const formActions = document.getElementById("formActions");
+
+  // login overlay
+  const loginBack = document.getElementById("loginBack");
+  const loginEmail = document.getElementById("loginEmail");
+  const loginPass = document.getElementById("loginPass");
+  const loginMsg = document.getElementById("loginMsg");
+  const btnLogin = document.getElementById("btnLogin");
+  const btnLoginLater = document.getElementById("btnLoginLater");
+  const btnResetPass = document.getElementById("btnResetPass");
+
+  // activity collapsible
+  const elActivityCount = document.getElementById("activityCount");
+  const elActivityList = document.getElementById("activityList");
+  const btnActivityToggle = document.getElementById("activityToggle");
+  const elActivityArrow = document.getElementById("activityArrow");
+  const elActivityHint = document.getElementById("activityHint");
+
+  let activityExpanded = false;
+
+  /******************************************************************
+   * 2) HELPERS
+   ******************************************************************/
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  function fmtDate(ts){
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  }
+  function fmtTime(ts){
+    const d = new Date(ts);
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+  function fmtDateTime(ts){ return `${fmtDate(ts)} ${fmtTime(ts)}`; }
+  function todayKey(){ return fmtDate(Date.now()); }
+
+  function minutesDiff(aTs, bTs){
+    if(aTs == null || bTs == null) return null;
+    if(bTs < aTs) return null;
+    return Math.floor((bTs - aTs) / 60000);
+  }
+  function hm(min){
+    if(min == null) return "";
+    const h = Math.floor(min/60);
+    const m = min%60;
+    return `${h} h ${pad2(m)} m`;
+  }
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;");
+  }
+
+  function dtLocalValue(ts){
+    const d = new Date(ts);
+    const yyyy = d.getFullYear();
+    const mm = pad2(d.getMonth()+1);
+    const dd = pad2(d.getDate());
+    const hh = pad2(d.getHours());
+    const mi = pad2(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  }
+  function dateOnlyValue(ts){
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  }
+  function monthKeyDefault(){
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
+  }
+
+  function setStatus(msg){
+    elStatusText.textContent = "Stav: " + msg;
+  }
+
+  function setSyncBadge({state, text}){
+    elSyncDot.classList.remove("ok","warn","bad");
+    if(state === "ok") elSyncDot.classList.add("ok");
+    if(state === "warn") elSyncDot.classList.add("warn");
+    if(state === "bad") elSyncDot.classList.add("bad");
+    elSyncText.textContent = text;
+  }
+
+  function lockUI(lock){
+    btnShiftStart.disabled = lock;
+    btnShiftEnd.disabled = lock;
+    btnHomeOffice.disabled = lock;
+    btnVacationMain.disabled = lock;
+    btnSickMain.disabled = lock;
+    btnTrainingMain.disabled = lock;
+    btnExport.disabled = lock;
+    monthPick.disabled = lock;
+  }
+
+  // LED helpers
+  let lastGpsOk = null; // null=nezjištěno
+  function setLed(el, ok){
+    if(!el) return;
+    el.classList.remove("bg-emerald-400","bg-rose-400","bg-amber-300");
+    el.style.boxShadow = "";
+    if(ok === true){
+      el.classList.add("bg-emerald-400");
+      el.style.boxShadow = "0 0 14px rgba(34,197,94,.45)";
+    }else if(ok === false){
+      el.classList.add("bg-rose-400");
+      el.style.boxShadow = "0 0 14px rgba(244,63,94,.35)";
+    }else{
+      el.classList.add("bg-amber-300");
+      el.style.boxShadow = "0 0 14px rgba(245,158,11,.35)";
+    }
+  }
+
+  async function updateLeds(){
+    setLed(elOnlineDot, navigator.onLine);
+    try{
+      const u = await getUser();
+      setLed(elSyncDot, !!u);
+    }catch{
+      setLed(elSyncDot, false);
+    }
+    setLed(elGpsDot, lastGpsOk);
+  }
+
+  function setPulse(btn, active){
+    if(!btn) return;
+    btn.classList.toggle("pulse-active", !!active);
+  }
+
+  /******************************************************************
+   * 3) MODALS / DRAWER
+   ******************************************************************/
+  function confirmAction(message){
+    return new Promise((resolve) => {
+      modalMsg.textContent = message;
+      modalBack.style.display = "flex";
+      modalBack.setAttribute("aria-hidden","false");
+
+      const cleanup = () => {
+        modalBack.style.display = "none";
+        modalBack.setAttribute("aria-hidden","true");
+        modalYes.onclick = null;
+        modalNo.onclick = null;
+        modalBack.onclick = null;
+      };
+
+      modalYes.onclick = () => { cleanup(); resolve(true); };
+      modalNo.onclick  = () => { cleanup(); resolve(false); };
+      modalBack.onclick = (e) => { if(e.target === modalBack){ cleanup(); resolve(false); } };
+    });
+  }
+
+  function openDrawer(){
+    drawerBack.style.display = "block";
+    drawerBack.setAttribute("aria-hidden","false");
+  }
+  function closeDrawer(){
+    drawerBack.style.display = "none";
+    drawerBack.setAttribute("aria-hidden","true");
+  }
+
+  function openForm({title, bodyHtml, buttons}){
+    formTitle.textContent = title;
+    formBody.innerHTML = bodyHtml;
+    formActions.innerHTML = "";
+
+    buttons.forEach(b => {
+      const btn = document.createElement("button");
+      btn.className = b.cls || "";
+      btn.textContent = b.text;
+      btn.onclick = async () => { await b.onClick?.(); };
+      formActions.appendChild(btn);
+    });
+
+    formBack.style.display = "flex";
+    formBack.setAttribute("aria-hidden","false");
+    formBack.onclick = (e) => { if(e.target === formBack) closeForm(); };
+  }
+  function closeForm(){
+    formBack.style.display = "none";
+    formBack.setAttribute("aria-hidden","true");
+    formBack.onclick = null;
+  }
+  function $id(id){ return document.getElementById(id); }
+
+  function showLoginOverlay(show){
+    loginBack.style.display = show ? "flex" : "none";
+    loginBack.setAttribute("aria-hidden", show ? "false" : "true");
+    loginMsg.classList.add("hidden");
+    loginMsg.textContent = "";
+  }
+
+  /******************************************************************
+   * 4) GEO
+   ******************************************************************/
+  function getGeo(){
+    return new Promise((resolve) => {
+      if(!navigator.geolocation){
+        resolve({ ok:false, err:"Geolocation není podporovaný." });
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({
+          ok:true,
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          acc: pos.coords.accuracy
+        }),
+        (err) => resolve({ ok:false, err: err?.message || "GPS chyba" }),
+        { enableHighAccuracy:true, timeout: 12000, maximumAge: 0 }
+      );
+    });
+  }
+
+  async function capturePoint(){
+    const ts = Date.now();
+    const geo = await getGeo();
+    lastGpsOk = !!geo.ok;
+    updateLeds().catch(()=>{});
+    return {
+      ts,
+      lat: geo.ok ? geo.lat : null,
+      lon: geo.ok ? geo.lon : null,
+      acc: geo.ok ? geo.acc : null,
+      geoOk: geo.ok,
+      geoErr: geo.ok ? null : geo.err
+    };
+  }
+
+  /******************************************************************
+   * 5) AUTH (Supabase)
+   ******************************************************************/
+  async function signIn(email, password){
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    return data;
+  }
+  async function signOut(){
+    const { error } = await supabase.auth.signOut();
+    if(error) throw error;
+  }
+  async function getUser(){
+    const { data } = await supabase.auth.getUser();
+    return data?.user || null;
+  }
+  async function ensureAuthUI(){
+    const user = await getUser();
+    if(user){
+  accountLabel.textContent = user.email || "Přihlášen";
+  accountChip.textContent = "logout";
+  if(elUserEmailTop) elUserEmailTop.textContent = (user.email || "").toLowerCase();
+  showLoginOverlay(false);
+}else{
+  accountLabel.textContent = "Nepřihlášen";
+  accountChip.textContent = "login";
+  if(elUserEmailTop) elUserEmailTop.textContent = "nepřihlášen";
+}
+    return user;
+  }
+
+  /******************************************************************
+   * 6) ONLINE + OFFLINE QUEUE (Outbox)
+   ******************************************************************/
+  const OUTBOX_KEY = "merch_outbox_v1";
+  const LOCAL_CACHE_KEY = "merch_cache_events_v1";
+  const LOCAL_CACHE_MAX = 2000;
+
+  function outboxLoad(){
+    try{
+      const raw = localStorage.getItem(OUTBOX_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    }catch{ return []; }
+  }
+  function outboxSave(arr){ localStorage.setItem(OUTBOX_KEY, JSON.stringify(arr)); }
+
+  function cacheLoad(){
+    try{
+      const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    }catch{ return []; }
+  }
+  function cacheSave(arr){
+    const sliced = arr.slice(-LOCAL_CACHE_MAX);
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(sliced));
+  }
+
+  function uuid(){
+    return (crypto?.randomUUID ? crypto.randomUUID() : (Date.now()+"_"+Math.random().toString(16).slice(2)));
+  }
+
+  function buildEventRow({kind, ts, session_id=null, payload={}}){
+    const iso = new Date(ts).toISOString();
+    const day = iso.slice(0,10);
+    return {
+      client_event_id: uuid(),
+      kind,
+      ts: iso,
+      day,
+      session_id,
+      store_name: null,
+      lat: null, lon: null, acc: null,
+      payload
+    };
+  }
+
+  async function pushEventToSupabase(row){
+    const user = await getUser();
+    if(!user) throw new Error("NOT_SIGNED_IN");
+
+    const insertRow = {
+      user_id: user.id,
+      user_email: user.email,
+      kind: row.kind,
+      ts: row.ts,
+      day: row.day,
+      session_id: row.session_id,
+      store_name: null,
+      lat: row.lat ?? null,
+      lon: row.lon ?? null,
+      acc: row.acc ?? null,
+      payload: row.payload || {}
+    };
+
+    const { error } = await supabase.from("attendance_events").insert(insertRow);
+    if(error) throw error;
+  }
+
+  async function queueAndTrySend(row){
+    const ob = outboxLoad();
+    ob.push(row);
+    outboxSave(ob);
+
+    const cache = cacheLoad();
+    cache.push(row);
+    cacheSave(cache);
+
+    try{
+      await pushEventToSupabase(row);
+      const ob2 = outboxLoad().filter(x => x.client_event_id !== row.client_event_id);
+      outboxSave(ob2);
+      setSyncBadge({state:"ok", text: ob2.length ? `sync: ${ob2.length} čeká` : "sync: ok"});
+    }catch(e){
+      const ob3 = outboxLoad();
+      setSyncBadge({state:navigator.onLine ? "warn" : "bad", text: `čeká: ${ob3.length}`});
+      throw e;
+    }
+  }
+
+  async function syncOutbox(){
+    const user = await getUser();
+    const ob = outboxLoad();
+    if(!ob.length){
+      setSyncBadge({state: navigator.onLine ? "ok" : "bad", text: navigator.onLine ? "sync: ok" : "offline"});
+      return;
+    }
+    if(!user){
+      setSyncBadge({state:"warn", text:`čeká: ${ob.length} (bez loginu)`});
+      return;
+    }
+    if(!navigator.onLine){
+      setSyncBadge({state:"bad", text:`offline (čeká: ${ob.length})`});
+      return;
+    }
+
+    let sent = 0;
+    const remaining = [];
+    for(const row of ob){
+      try{
+        await pushEventToSupabase(row);
+        sent++;
+      }catch{
+        remaining.push(row);
+      }
+    }
+    outboxSave(remaining);
+    setSyncBadge({state: remaining.length ? "warn" : "ok", text: remaining.length ? `čeká: ${remaining.length}` : `sync: ok`});
+    if(sent) setStatus(`odesláno ${sent} záznamů ✅`);
+  }
+
+  /******************************************************************
+   * 7) FETCH Z CLOUDU (pro export)
+   ******************************************************************/
+  async function fetchMonthEvents(year, month1to12){
+    const user = await getUser();
+    if(!user) throw new Error("NOT_SIGNED_IN");
+
+    const from = new Date(year, month1to12-1, 1, 0,0,0,0).toISOString();
+    const to = new Date(year, month1to12, 1, 0,0,0,0).toISOString();
+
+    const { data, error } = await supabase
+      .from("attendance_events")
+      .select("*")
+      .gte("ts", from)
+      .lt("ts", to)
+      .order("ts", { ascending: true });
+
+    if(error) throw error;
+    return data || [];
+  }
+
+  /******************************************************************
+   * 8) DOMAIN LOGIC (only shift + day types)
+   ******************************************************************/
+  function normalizeRow(r){
+    return {
+      id: r.id || r.client_event_id || uuid(),
+      kind: r.kind,
+      ts: (typeof r.ts === "string") ? r.ts : new Date(r.ts).toISOString(),
+      day: r.day || (typeof r.ts === "string" ? r.ts.slice(0,10) : fmtDate(r.ts)),
+      session_id: r.session_id || null,
+      payload: r.payload || {}
+    };
+  }
+
+  function parseRangeFromPayload(e){
+    const s = e.payload?.start_ts ? Date.parse(e.payload.start_ts) : null;
+    const en = e.payload?.end_ts ? Date.parse(e.payload.end_ts) : null;
+    return { startTs: Number.isFinite(s) ? s : null, endTs: Number.isFinite(en) ? en : null };
+  }
+
+  function isNowInRange(e){
+    const now = Date.now();
+    const { startTs, endTs } = parseRangeFromPayload(e);
+    if(startTs == null || endTs == null) return false;
+    return now >= startTs && now <= endTs;
+  }
+
+  function deriveTodayState(rows){
+    const events = rows.map(normalizeRow).filter(r => r.day === todayKey()).sort((a,b)=>a.ts.localeCompare(b.ts));
+
+    const sessions = new Map();
+    const homeOffice = [];
+    const trainings = [];
+    const sickness = [];
+    let vacation = false;
+
+    for(const e of events){
+      if(e.kind === "SHIFT_START"){
+        const sid = e.session_id || uuid();
+        if(!sessions.has(sid)) sessions.set(sid, { session_id: sid, start: e, end: null });
+      }
+      if(e.kind === "SHIFT_END"){
+        const sid = e.session_id;
+        if(sid && sessions.has(sid)) sessions.get(sid).end = e;
+      }
+
+      if(e.kind === "HOME_OFFICE") homeOffice.push(e);
+      if(e.kind === "TRAINING") trainings.push(e);
+      if(e.kind === "SICK") sickness.push(e);
+      if(e.kind === "VACATION") vacation = true;
+    }
+
+    const sessArr = Array.from(sessions.values()).sort((a,b)=>{
+      const ats = a.start?.ts || "";
+      const bts = b.start?.ts || "";
+      return ats.localeCompare(bts);
+    });
+
+    const activeSession = [...sessArr].reverse().find(s => s.start && !s.end) || null;
+
+    return { events, sessions: sessArr, activeSession, homeOffice, trainings, sickness, vacation };
+  }
+
+  /******************************************************************
+   * 9) ACTIONS
+   ******************************************************************/
+  async function startShift(){
+    const ok = await confirmAction("Přejete si potvrdit příchod do práce?");
+    if(!ok) return;
+
+    const st = deriveTodayState(cacheLoad());
+    if(st.activeSession){
+      setStatus("směna už běží (nejdřív dej odchod).");
+      render();
+      return;
+    }
+
+    lockUI(true);
+    setStatus("ukládám příchod…");
+
+    const p = await capturePoint();
+    const session_id = uuid();
+
+    const row = buildEventRow({
+      kind: "SHIFT_START",
+      ts: p.ts,
+      session_id,
+      payload: { app_version: "supabase_v2_neon" }
+    });
+    row.lat = p.lat; row.lon = p.lon; row.acc = p.acc;
+
+    try{
+      await queueAndTrySend(row);
+      setStatus(p.geoOk ? "příchod uložen ✅ (s GPS)" : `příchod uložen ✅ (bez GPS: ${p.geoErr})`);
+    }catch{
+      setStatus("uloženo offline do fronty ✅");
+    }finally{
+      lockUI(false);
+      render();
+    }
+  }
+
+  async function endShift(){
+    const ok = await confirmAction("Přejete si potvrdit odchod z práce?");
+    if(!ok) return;
+
+    const st = deriveTodayState(cacheLoad());
+    const s = st.activeSession;
+    if(!s){
+      setStatus("žádná směna neběží.");
+      render();
+      return;
+    }
+
+    lockUI(true);
+    setStatus("ukládám odchod…");
+
+    const p = await capturePoint();
+
+    const row = buildEventRow({
+      kind: "SHIFT_END",
+      ts: p.ts,
+      session_id: s.session_id,
+      payload: { app_version: "supabase_v2_neon" }
+    });
+    row.lat = p.lat; row.lon = p.lon; row.acc = p.acc;
+
+    try{
+      await queueAndTrySend(row);
+      const workMin = minutesDiff(Date.parse(s.start.ts), p.ts);
+      setStatus(p.geoOk ? `odchod uložen ✅ (celkem ${hm(workMin)})` : `odchod uložen ✅ (bez GPS: ${p.geoErr})`);
+    }catch{
+      setStatus("uloženo offline do fronty ✅");
+    }finally{
+      lockUI(false);
+      render();
+    }
+  }
+
+  function openRangeForm({title, kind, colorClass, glowStyle, defaultHours, paidLabel}){
+    const now = Date.now();
+    const startDefault = dtLocalValue(now);
+    const endDefault = dtLocalValue(now + defaultHours*60*60000);
+
+    openForm({
+      title,
+      bodyHtml: `
+        <div class="space-y-3">
+          <div class="text-[12px] text-slate-300">${paidLabel}</div>
+          <label class="block text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">Od</label>
+          <input class="w-full rounded-2xl px-4 py-4 bg-slate-950/35 border border-slate-400/15 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-300/25"
+            type="datetime-local" id="rngStart" value="${startDefault}">
+          <label class="block text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">Do</label>
+          <input class="w-full rounded-2xl px-4 py-4 bg-slate-950/35 border border-slate-400/15 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-300/25"
+            type="datetime-local" id="rngEnd" value="${endDefault}">
+          <div class="text-[11px] text-slate-400">Uloží se do logu jako ${kind}.</div>
+        </div>
+      `,
+      buttons: [
+        { text:"Uložit", cls:`flex-1 rounded-2xl py-3 font-black tracking-widest ${colorClass} border border-white/10 active:scale-[.99] transition`, onClick: async () => {
+          const ok = await confirmAction(`Potvrdit uložení: ${title}?`);
+          if(!ok) return;
+
+          const sVal = $id("rngStart").value;
+          const eVal = $id("rngEnd").value;
+          const startTs = Date.parse(sVal);
+          const endTs = Date.parse(eVal);
+
+          if(!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs){
+            alert("Neplatný časový rozsah.");
+            return;
+          }
+
+          const minutes = minutesDiff(startTs, endTs) ?? 0;
+
+          lockUI(true);
+          try{
+            const row = buildEventRow({
+              kind,
+              ts: startTs,
+              payload: {
+                start_ts: new Date(startTs).toISOString(),
+                end_ts: new Date(endTs).toISOString(),
+                minutes
+              }
+            });
+            await queueAndTrySend(row);
+            setStatus(`${title} uloženo ✅`);
+          }catch{
+            setStatus(`${title} uloženo offline do fronty ✅`);
+          }finally{
+            lockUI(false);
+            closeForm();
+            render();
+          }
+        }},
+        { text:"Zrušit", cls:`flex-1 rounded-2xl py-3 font-black tracking-widest bg-rose-500/18 border border-rose-300/20 active:scale-[.99] transition`, onClick: async () => closeForm() }
+      ]
+    });
+  }
+
+  function openVacationForm(){
+    const dk = todayKey();
+    openForm({
+      title: "Dovolená",
+      bodyHtml: `
+        <div class="space-y-3">
+          <div class="text-[12px] text-slate-300">Vyber den nebo rozsah (pro každý den se uloží 8 hodin).</div>
+
+          <label class="block text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">Od (datum)</label>
+          <input class="w-full rounded-2xl px-4 py-4 bg-slate-950/35 border border-slate-400/15 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-300/25"
+            type="date" id="vacFrom" value="${dk}">
+
+          <label class="block text-[11px] font-extrabold tracking-widest text-slate-400 uppercase">Do (datum)</label>
+          <input class="w-full rounded-2xl px-4 py-4 bg-slate-950/35 border border-slate-400/15 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-300/25"
+            type="date" id="vacTo" value="${dk}">
+
+          <div class="text-[11px] text-slate-400">Tip: pro jeden den nech stejné Od i Do.</div>
+        </div>
+      `,
+      buttons: [
+        { text:"Uložit", cls:"flex-1 rounded-2xl py-3 font-black tracking-widest bg-sky-500/18 border border-sky-300/20 active:scale-[.99] transition", onClick: async () => {
+          const from = $id("vacFrom").value;
+          const to = $id("vacTo").value;
+          if(!from || !to){ alert("Vyber datum od/do."); return; }
+
+          const ok = await confirmAction(`Přidat dovolenou od ${from} do ${to}?`);
+          if(!ok) return;
+
+          const start = Date.parse(from + "T00:00:00");
+          const end = Date.parse(to + "T00:00:00");
+          if(!Number.isFinite(start) || !Number.isFinite(end) || end < start){
+            alert("Neplatný rozsah.");
+            return;
+          }
+
+          lockUI(true);
+          try{
+            // create one event per day
+            const dayCount = Math.round((end - start) / (24*60*60000)) + 1;
+            for(let i=0;i<dayCount;i++){
+              const ts = start + i*24*60*60000;
+              const day = dateOnlyValue(ts);
+              const row = buildEventRow({
+                kind: "VACATION",
+                ts,
+                payload: { day, minutes: 480 }
+              });
+              await queueAndTrySend(row);
+            }
+            setStatus("dovolená uložena ✅");
+          }catch{
+            setStatus("dovolená uložena offline do fronty ✅");
+          }finally{
+            lockUI(false);
+            closeForm();
+            render();
+          }
+        }},
+        { text:"Zrušit", cls:"flex-1 rounded-2xl py-3 font-black tracking-widest bg-rose-500/18 border border-rose-300/20 active:scale-[.99] transition", onClick: async () => closeForm() }
+      ]
+    });
+  }
+
+  /******************************************************************
+   * 10) EXPORT (CSV)
+   ******************************************************************/
+  function parseMonthValue(v){
+    if(!v) return null;
+    const [y,m] = v.split("-").map(Number);
+    if(!y || !m) return null;
+    return { y, m };
+  }
+  function csvEscape(value, sep){
+    const s = String(value ?? "");
+    const needs = s.includes(sep) || s.includes('"') || s.includes("\n");
+    const v = s.replaceAll('"','""');
+    return needs ? `"${v}"` : v;
+  }
+
+  function groupByDay(rows){
+    const by = new Map();
+    rows.forEach(r => {
+      const e = normalizeRow(r);
+      const day = e.day;
+      if(!by.has(day)) by.set(day, []);
+      by.get(day).push(e);
+    });
+    for(const arr of by.values()){
+      arr.sort((a,b)=>a.ts.localeCompare(b.ts));
+    }
+    return by;
+  }
+
+  function computeDayTotals(dayRows){
+    const sessions = new Map();
+    let homeOfficeMin = 0;
+    let trainingMin = 0;
+    let sickMin = 0;
+    let vacationMin = 0;
+
+    for(const e of dayRows){
+      if(e.kind === "SHIFT_START"){
+        const sid = e.session_id;
+        if(sid && !sessions.has(sid)) sessions.set(sid, { start: e, end: null });
+      }
+      if(e.kind === "SHIFT_END"){
+        const sid = e.session_id;
+        if(sid){
+          if(!sessions.has(sid)) sessions.set(sid, { start: null, end: e });
+          else sessions.get(sid).end = e;
+        }
+      }
+      if(e.kind === "HOME_OFFICE") homeOfficeMin += (e.payload?.minutes ?? 0);
+      if(e.kind === "TRAINING") trainingMin += (e.payload?.minutes ?? 0);
+      if(e.kind === "SICK") sickMin += (e.payload?.minutes ?? 0);
+      if(e.kind === "VACATION") vacationMin = 480;
+    }
+
+    let workMin = 0;
+    for(const s of sessions.values()){
+      if(s.start && s.end){
+        const m = minutesDiff(Date.parse(s.start.ts), Date.parse(s.end.ts));
+        if(m != null) workMin += m;
+      }
+    }
+
+    const paidMin = workMin + trainingMin + homeOfficeMin + vacationMin;
+    return { workMin, homeOfficeMin, trainingMin, sickMin, vacationMin, paidMin };
+  }
+
+  async function exportCsv(){
+    const sel = parseMonthValue(monthPick.value);
+    if(!sel){ alert("Vyber měsíc pro export."); return; }
+
+    lockUI(true);
+    setStatus("připravuju export…");
+
+    let rows = [];
+    try{
+      const user = await getUser();
+      if(user){
+        rows = await fetchMonthEvents(sel.y, sel.m);
+      }else{
+        const all = cacheLoad().map(normalizeRow);
+        rows = all.filter(r => {
+          const d = new Date(r.ts);
+          return d.getFullYear() === sel.y && (d.getMonth()+1) === sel.m;
+        });
+      }
+    }catch(e){
+      alert("Export selhal: " + (e?.message || e));
+      lockUI(false);
+      return;
+    }
+
+    const byDay = groupByDay(rows);
+    const sep = ",";
+    const head = [
+      "row_type","date",
+      "work_minutes","home_office_minutes","training_minutes","vacation_minutes","sick_minutes","paid_minutes",
+      "kind","ts","session_id",
+      "payload_json"
+    ];
+    const lines = [head.join(sep)];
+
+    const days = Array.from(byDay.keys()).sort((a,b)=>a.localeCompare(b));
+    for(const day of days){
+      const dayRows = byDay.get(day);
+      const t = computeDayTotals(dayRows);
+
+      lines.push([
+        "DAY_TOTAL", day,
+        t.workMin, t.homeOfficeMin, t.trainingMin, t.vacationMin, t.sickMin, t.paidMin,
+        "", "", "",
+        ""
+      ].map(x=>csvEscape(x, sep)).join(sep));
+
+      for(const e of dayRows){
+        lines.push([
+          "EVENT", day,
+          "", "", "", "", "", "",
+          e.kind, e.ts, e.session_id || "",
+          JSON.stringify(e.payload || {})
+        ].map(x=>csvEscape(x, sep)).join(sep));
+      }
+    }
+
+    const csv = "\uFEFF" + lines.join("\n");
+    const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const fname = `merchandiser_log_${sel.y}_${pad2(sel.m)}.csv`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    lockUI(false);
+    setStatus("export hotovej ✅");
+  }
+
+  /******************************************************************
+   * 11) RENDER
+   ******************************************************************/
+  function updateNow(){
+    const d = new Date();
+    elNow.textContent = `${d.getDate()}. ${d.getMonth()+1}. ${d.getFullYear()}  ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+
+  function render(){
+    updateNow();
+
+    const ob = outboxLoad();
+    if(!navigator.onLine){
+      setSyncBadge({state:"bad", text: `offline (čeká: ${ob.length})`});
+    }else{
+      setSyncBadge({state: ob.length ? "warn" : "ok", text: ob.length ? `čeká: ${ob.length}` : "sync: ok"});
+    }
+
+    const st = deriveTodayState(cacheLoad());
+
+    if(!st.activeSession) elPill.textContent = "MIMO PRACOVNÍ DOBU";
+    else elPill.textContent = "VE SMĚNĚ";
+
+    // shift buttons
+    btnShiftStart.disabled = !!st.activeSession;
+    btnShiftEnd.disabled = !st.activeSession;
+    // --- Shift button visuals ---
+if (st.activeSession) {
+  // PŘÍCHOD: pulzuje zeleně, ale zůstává disabled (jen vizuál)
+  btnShiftStart.classList.add("pulse-active");
+
+  // ODCHOD: červeně vyplněný (solid)
+  btnShiftEnd.classList.remove("bg-transparent");
+  btnShiftEnd.classList.add("bg-rose-500/22","border-rose-300/25");
+} else {
+  // mimo směnu
+  btnShiftStart.classList.remove("pulse-active");
+
+  // ODCHOD zpět na outline
+  btnShiftEnd.classList.remove("bg-rose-500/22");
+  btnShiftEnd.classList.add("bg-transparent","border-rose-300/25");
+}
+
+    // active “day type” buttons (pulse when active)
+    const hoActive = st.homeOffice.some(isNowInRange);
+    const trActive = st.trainings.some(isNowInRange);
+    const siActive = st.sickness.some(isNowInRange);
+    const vaActive = st.vacation === true;
+
+    setPulse(btnHomeOffice, hoActive);
+    setPulse(btnTrainingMain, trActive);
+    setPulse(btnSickMain, siActive);
+    setPulse(btnVacationMain, vaActive);
+
+    if(!monthPick.value) monthPick.value = monthKeyDefault();
+
+    // build items list
+    const items = [];
+    for(let i=0; i<st.sessions.length; i++){
+      const s = st.sessions[i];
+      if(s.start){
+        items.push({
+          tag:`SMĚNA #${i+1}`,
+          title:"Příchod",
+          sub:`${fmtDateTime(Date.parse(s.start.ts))}`
+        });
+      }
+      if(s.end && s.start){
+        const w = minutesDiff(Date.parse(s.start.ts), Date.parse(s.end.ts));
+        items.push({
+          tag:`SMĚNA #${i+1}`,
+          title:"Odchod",
+          sub:`${fmtDateTime(Date.parse(s.end.ts))} • Celkem: ${hm(w)}`
+        });
+      }else if(s.start){
+        items.push({
+          tag:`SMĚNA #${i+1}`,
+          title:"Běží…",
+          sub:"Směna není uzavřená (čeká na Odchod)."
+        });
+      }
+    }
+
+    for(const e of st.homeOffice){
+      const { startTs, endTs } = parseRangeFromPayload(e);
+      items.push({
+        tag:"HOME OFFICE",
+        title:"Home Office",
+        sub:`${startTs ? fmtDateTime(startTs) : e.ts} → ${endTs ? fmtDateTime(endTs) : ""} • ${hm(e.payload?.minutes || 0)}`
+      });
+    }
+    for(const e of st.trainings){
+      const { startTs, endTs } = parseRangeFromPayload(e);
+      items.push({
+        tag:"ŠKOLENÍ",
+        title:"Školení (placené)",
+        sub:`${startTs ? fmtDateTime(startTs) : e.ts} → ${endTs ? fmtDateTime(endTs) : ""} • ${hm(e.payload?.minutes || 0)}`
+      });
+    }
+    for(const e of st.sickness){
+      const { startTs, endTs } = parseRangeFromPayload(e);
+      items.push({
+        tag:"NEMOC",
+        title:"Nemoc (neplacená)",
+        sub:`${startTs ? fmtDateTime(startTs) : e.ts} → ${endTs ? fmtDateTime(endTs) : ""} • ${hm(e.payload?.minutes || 0)}`
+      });
+    }
+    if(st.vacation){
+      items.push({ tag:"DOVOLENÁ", title:"Dovolená", sub:"Celý den (8 hodin)" });
+    }
+
+    // Collapsible activity UI
+    elActivityCount.textContent = String(items.length);
+
+    if(items.length === 0){
+      elActivityHint.textContent = "Zatím žádná aktivita";
+      elActivityArrow.style.transform = "rotate(0deg)";
+      elActivityList.classList.add("hidden");
+      elActivityList.innerHTML = `
+        <div class="mt-2 glass-soft rounded-2xl px-4 py-4 border border-slate-400/10 text-slate-400 text-sm">
+          Zatím nic. Klikni na PŘÍCHOD.
+        </div>
+      `;
+    } else {
+      elActivityHint.textContent = activityExpanded ? "Klikni pro sbalení" : "Klikni pro rozbalení detailu";
+      elActivityArrow.style.transform = activityExpanded ? "rotate(90deg)" : "rotate(0deg)";
+
+      if(!activityExpanded){
+        elActivityList.classList.add("hidden");
+        elActivityList.innerHTML = "";
+      } else {
+        elActivityList.classList.remove("hidden");
+        elActivityList.innerHTML = items.map(it => `
+          <div class="mt-3 glass-soft rounded-2xl px-4 py-4 border border-slate-400/10">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-sm font-black tracking-wide text-slate-100">${escapeHtml(it.title)}</div>
+                <div class="mt-1 text-[12px] text-slate-400 font-semibold whitespace-pre-wrap">${escapeHtml(it.sub)}</div>
+              </div>
+              <div class="text-[11px] font-extrabold tracking-widest px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-300/10 text-indigo-200 whitespace-nowrap">
+                ${escapeHtml(it.tag)}
+              </div>
+            </div>
+          </div>
+        `).join("");
+      }
+    }
+
+    updateLeds().catch(()=>{});
+  }
+
+  /******************************************************************
+   * 12) MENU / SERVIS AKCE
+   ******************************************************************/
+  async function handleAccountClick(){
+    closeDrawer();
+    const user = await getUser();
+    if(user){
+      const ok = await confirmAction("Odhlásit se?");
+      if(!ok) return;
+      await signOut();
+      await ensureAuthUI();
+      setStatus("odhlášeno");
+      render();
+      return;
+    }
+    showLoginOverlay(true);
+  }
+
+  async function clearTodayLocal(){
+    closeDrawer();
+    const ok = await confirmAction("Vymazat dnešní lokální cache? (cloud data zůstávají)");
+    if(!ok) return;
+    const dk = todayKey();
+    const cache = cacheLoad().map(normalizeRow).filter(r => r.day !== dk);
+    cacheSave(cache);
+    const ob = outboxLoad().filter(r => (normalizeRow(r).day !== dk));
+    outboxSave(ob);
+    setStatus("dnešek vymazán lokálně 🧼");
+    render();
+  }
+
+  async function clearAllLocal(){
+    closeDrawer();
+    const ok = await confirmAction("Vymazat veškerá lokální data? (cloud data zůstávají)");
+    if(!ok) return;
+    localStorage.removeItem(LOCAL_CACHE_KEY);
+    localStorage.removeItem(OUTBOX_KEY);
+    setStatus("lokální data vymazána 🧼");
+    render();
+  }
+
+  /******************************************************************
+   * 13) LOGIN HANDLERS
+   ******************************************************************/
+  btnLogin.addEventListener("click", async () => {
+    loginMsg.classList.add("hidden");
+    const email = (loginEmail.value || "").trim();
+    const pass = (loginPass.value || ""); // ne-trimovat heslo
+    if(!email || !pass){
+      loginMsg.textContent = "Zadej email a heslo.";
+      loginMsg.classList.remove("hidden");
+      return;
+    }
+    btnLogin.disabled = true;
+    try{
+      await signIn(email, pass);
+      await ensureAuthUI();
+      showLoginOverlay(false);
+      setStatus("přihlášeno ✅");
+      await syncOutbox();
+    }catch(e){
+      loginMsg.textContent = "Přihlášení selhalo: " + (e?.message || e);
+      loginMsg.classList.remove("hidden");
+    }finally{
+      btnLogin.disabled = false;
+      render();
+    }
+  });
+
+  btnResetPass.addEventListener("click", async () => {
+    loginMsg.classList.add("hidden");
+    const email = (loginEmail.value || "").trim();
+    if(!email){
+      loginMsg.textContent = "Zadej email pro reset hesla.";
+      loginMsg.classList.remove("hidden");
+      return;
+    }
+
+    btnResetPass.disabled = true;
+    try{
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://pavelsukup-netizen.github.io/dochazka/"
+      });
+      if(error) throw error;
+      loginMsg.textContent = "Hotovo ✅ Koukej do emailu (Reset password) a klikni na odkaz.";
+      loginMsg.classList.remove("hidden");
+    }catch(e){
+      loginMsg.textContent = "Reset selhal: " + (e?.message || e);
+      loginMsg.classList.remove("hidden");
+    }finally{
+      btnResetPass.disabled = false;
+    }
+  });
+
+  btnLoginLater.addEventListener("click", () => showLoginOverlay(false));
+
+  /******************************************************************
+   * 14) WIRE-UP
+   ******************************************************************/
+  btnShiftStart.addEventListener("click", startShift);
+  btnShiftEnd.addEventListener("click", endShift);
+
+  btnHomeOffice.addEventListener("click", async () => {
+    closeDrawer();
+    openRangeForm({
+      title: "Home Office",
+      kind: "HOME_OFFICE",
+      colorClass: "bg-amber-400/15",
+      glowStyle: "--glow: rgba(245,158,11,.55); --glow2: rgba(245,158,11,.20);",
+      defaultHours: 8,
+      paidLabel: "Placená práce z domova (od–do)"
+    });
+  });
+
+  btnTrainingMain.addEventListener("click", async () => {
+    closeDrawer();
+    openRangeForm({
+      title: "Školení (placené)",
+      kind: "TRAINING",
+      colorClass: "bg-pink-500/14",
+      glowStyle: "--glow: rgba(236,72,153,.55); --glow2: rgba(236,72,153,.20);",
+      defaultHours: 2,
+      paidLabel: "Placené školení (od–do)"
+    });
+  });
+
+  btnSickMain.addEventListener("click", async () => {
+    closeDrawer();
+    openRangeForm({
+      title: "Nemoc (neplacená)",
+      kind: "SICK",
+      colorClass: "bg-violet-500/14",
+      glowStyle: "--glow: rgba(167,139,250,.55); --glow2: rgba(167,139,250,.20);",
+      defaultHours: 8,
+      paidLabel: "Nemoc bez nároku na odměnu (od–do)"
+    });
+  });
+
+  btnVacationMain.addEventListener("click", async () => {
+    closeDrawer();
+    openVacationForm();
+  });
+
+  btnExport.addEventListener("click", exportCsv);
+
+  btnHamb.addEventListener("click", openDrawer);
+  drawerClose.addEventListener("click", closeDrawer);
+  drawerBack.addEventListener("click", (e) => { if(e.target === drawerBack) closeDrawer(); });
+
+  btnAccount.addEventListener("click", handleAccountClick);
+  btnSyncNow.addEventListener("click", async () => { closeDrawer(); await syncOutbox(); render(); });
+  btnClearToday.addEventListener("click", clearTodayLocal);
+  btnClearAllLocal.addEventListener("click", clearAllLocal);
+
+  btnActivityToggle.addEventListener("click", () => { activityExpanded = !activityExpanded; render(); });
+
+  window.addEventListener("online", () => { syncOutbox().catch(()=>{}); render(); });
+  window.addEventListener("offline", () => { render(); });
+
+  supabase.auth.onAuthStateChange((_event, _session) => {
+    ensureAuthUI().then(()=>{ render(); syncOutbox().catch(()=>{}); });
+  });
+
+  /******************************************************************
+   * 15) INIT
+   ******************************************************************/
+  (async () => {
+    if(!monthPick.value) monthPick.value = monthKeyDefault();
+    await ensureAuthUI();
+    updateLeds().catch(()=>{});
+    syncOutbox().catch(()=>{});
+    render();
+    setInterval(() => { updateNow(); }, 1000);
+  })();
+
+})();
+</script>
+</body>
+</html>
