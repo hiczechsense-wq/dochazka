@@ -1467,7 +1467,7 @@ if (st.activeSession) {
     btnResetPass.disabled = true;
     try{
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "https://pavelsukup-netizen.github.io/dochazka/"
+        redirectTo: "https://hiczechsense-wq.github.io/dochazka/"
       });
       if(error) throw error;
       loginMsg.textContent = "Hotovo ✅ Koukej do emailu (Reset password) a klikni na odkaz.";
