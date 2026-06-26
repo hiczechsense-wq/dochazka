@@ -1,4 +1,4 @@
-const CACHE_NAME = "merch-log-v6";
+const CACHE_NAME = "merch-log-v8";
 const ASSETS = [
   "./",
   "./index.html",
